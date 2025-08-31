@@ -8,9 +8,9 @@
         @test abs(solve(prob, FixedPointAccelerationJL(; algorithm = alg)).resid) ≤ 1e-10
     end
 
-    @test abs(solve(prob, SpeedMappingJL()).resid) ≤ 1e-10
-    @test abs(solve(prob, SpeedMappingJL(; orders = [3, 2])).resid) ≤ 1e-10
-    @test abs(solve(prob, SpeedMappingJL(; stabilize = true)).resid) ≤ 1e-10
+    for kwargs in ((;), (;algo = :acx), (;ada_relax = :minimum_distance), (;composite = :aa1))
+        @test abs(solve(prob, SpeedMappingJL(;kwargs...), abstol = 1e-10).resid) ≤ 1e-10
+    end
 
     @test abs(solve(prob, NLsolveJL(; method = :anderson)).resid) ≤ 1e-10
     @test abs(solve(prob, SIAMFANLEquationsJL(; method = :anderson)).resid) ≤ 1e-10
@@ -27,9 +27,10 @@ end
         @test maximum(abs.(solve(prob, FixedPointAccelerationJL()).resid)) ≤ 1e-10
     end
 
-    @test maximum(abs.(solve(prob, SpeedMappingJL()).resid)) ≤ 1e-10
-    @test maximum(abs.(solve(prob, SpeedMappingJL(; orders = [3, 2])).resid)) ≤ 1e-10
-    @test maximum(abs.(solve(prob, SpeedMappingJL(; stabilize = true)).resid)) ≤ 1e-10
+    for kwargs in ((;), (;algo = :acx), (;ada_relax = :minimum_distance), (;composite = :aa1))
+        @test maximum(abs.(solve(prob, SpeedMappingJL(;kwargs...), abstol = 1e-10).resid)) ≤ 1e-10
+    end
+
     @test maximum(abs.(solve(prob, SIAMFANLEquationsJL(; method = :anderson)).resid)) ≤
           1e-10
 
@@ -44,7 +45,7 @@ end
 
     C = [1 2 3; 4 5 6; 7 8 9]
     A = C + C'
-    B = Hermitian(ones(10) * ones(10)' .* im + Diagonal(1:10))
+    #B = Hermitian(ones(10) * ones(10)' .* im + Diagonal(1:10))
 
     function power_method!(du, u, A)
         mul!(du, A, u)
@@ -65,7 +66,7 @@ end
         end
     end
 
-    for kwargs in ((;), (; orders = [3, 2]), (; stabilize = true))
+    for kwargs in ((;), (;algo = :acx), (;ada_relax = :minimum_distance), (;composite = :aa1))
         alg = SpeedMappingJL(; kwargs...)
         sol = solve(prob, alg)
         @test sol.u' * A[:, 3] ≈ 32.916472867168096

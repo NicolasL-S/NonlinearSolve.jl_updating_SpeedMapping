@@ -272,47 +272,96 @@ NLSolversJL(; method, autodiff = nothing) = NLSolversJL(method, autodiff)
 
 """
     SpeedMappingJL(;
-        σ_min = 0.0, stabilize::Bool = false, check_obj::Bool = false,
-        orders::Vector{Int} = [3, 3, 2]
+        	f = nothing, algo = :aa, lags = 30, condition_max = 1e6, relax_default 1., 
+          ada_relax = :none, composite = :none, maps_limit = 1_000_000_000, 
+          reltol_resid_grow = 4., abstol_obj_grow = 0.0001, lower = nothing, 
+          upper = nothing, buffer = 0.05
     )
 
 Wrapper over [SpeedMapping.jl](https://nicolasl-s.github.io/SpeedMapping.jl/) for solving
-Fixed Point Problems. We allow using this algorithm to solve root finding problems as well.
+fixed-point problems. We allow using this algorithm to solve root finding problems as well. It 
+implements two algorithms: Alternating cyclic extrapolations (ACX) (see [lepage2024alternating](@cite))
+and [Anderson acceleration](https://en.wikipedia.org/wiki/Anderson_acceleration) (AA).
+
+Note: Default options for SpeedMappingJL (`algo = :aa, ada_relax = :none`) should work well for any 
+mapping application or for general nonlinear solving. For convergent mappings, potentially faster 
+options like `algo = :acx` or `ada_relax = :minimum_distance` can be used.
 
 ### Keyword Arguments
 
-  - `σ_min`: Setting to `1` may avoid stalling (see [lepage2021alternating](@cite)).
-  - `stabilize`: performs a stabilization mapping before extrapolating. Setting to `true`
-    may improve the performance for applications like accelerating the EM or MM algorithms
-    (see [lepage2021alternating](@cite)).
-  - `check_obj`: In case of NaN or Inf values, the algorithm restarts at the best past
-    iterate.
-  - `orders`: determines ACX's alternating order. Must be between `1` and `3` (where `1`
-    means no extrapolation). The two recommended orders are `[3, 2]` and `[3, 3, 2]`, the
-    latter being potentially better for highly non-linear applications (see
-    [lepage2021alternating](@cite)).
+`algo = :aa` determines the algorithm used, either `:acx` or `:aa` (default: `:aa`).
+
+`maps_limit = 1_000_000_000`: The maximum number of maps evaluated before the algorithm terminates.
+
+`reltol_resid_grow` is a problem-specific stabilizing parameter. 
+(see [SpeedMapping.jl](https://nicolasl-s.github.io/SpeedMapping.jl/) for details.)
+
+`lower, upper = nothing` set bounds on parameters.
+
+`buffer = 0.05` is used in conjunction with `lower` or `upper`. If an iterate `x` lands outside a 
+constraint, `buffer` leaves some distance between `x` and the constraint.
+
+### Keyword Arguments only affecting :aa (Anderson acceleration) algorithm
+
+`lags = 30` is the maximum number of past residuals used to compute the next iterate.
+
+`condition_max = 1e6` is the maximum condition number of the matrix of past residuals.
+
+`relax_default = 1.` is the default relaxation parameter (a.k.a. damping).
+
+`ada_relax = :none` implements adaptive relaxation (see [lepage2024adaptive](@cite)). Set to 
+`:minimum_distance` to accelerate the convergence for convergent mapping applications.
+
+`composite = :none` inserts a one-step AA or ACX2 iteration (using 2 maps) between 2 full AA steps, 
+which reduces the computation and can offer interesting speed-up for some applications 
+(see [chen2022composite](@cite)).  Two types are implemented: `:aa1` and `acx2`.
+
+`f` computes an objective function, used to ensure monotonicity of the algorithm.
+
+`abstol_obj_grow = 0.0001` If `f` is supplied, the objective is not allowed to increase by more than 
+`abstol_obj_grow` between iterations (otherwise, it fall back on the last map). Set 
+`abstol_obj_grow = 0` for tight monotonicity.
 
 !!! note
 
     This algorithm is only available if `SpeedMapping.jl` is installed and loaded.
 """
-@concrete struct SpeedMappingJL <: AbstractNonlinearSolveAlgorithm
-    σ_min
-    stabilize::Bool
-    check_obj::Bool
-    orders::Vector{Int}
+@concrete struct SpeedMappingJL{
+  Tobj, Tlags <: Real, Tcond <: Real, Trelax <: Real, Tmaps <: Real, Treltol <: Real, 
+  Tabstol <: Real, Tl, Tu, Tf <: AbstractFloat
+  } <: AbstractNonlinearSolveAlgorithm
+    f :: Tobj
+    algo :: Symbol
+    lags :: Tlags
+    condition_max :: Tcond
+    relax_default :: Trelax
+    ada_relax :: Symbol
+    composite :: Symbol
+    maps_limit :: Tmaps
+    reltol_resid_grow :: Treltol
+    abstol_obj_grow :: Tabstol
+    lower :: Tl
+    upper :: Tu
+    buffer :: Tf
     name::Symbol
 end
 
 function SpeedMappingJL(;
-        σ_min = 0.0, stabilize::Bool = false, check_obj::Bool = false,
-        orders::Vector{Int} = [3, 3, 2]
+    f :: Union{Function, Nothing} = nothing, algo::Symbol = :aa,
+    lags :: Integer = 30, condition_max :: Real = 1e6, 
+    relax_default :: Real = 1., ada_relax :: Symbol = :none, 
+    composite :: Symbol = :none, maps_limit :: Real = 1_000_000_000, 
+    reltol_resid_grow :: Real = algo == :aa ? 4. : 100., abstol_obj_grow :: Real = 0.0001, 
+    lower = nothing, upper = nothing, buffer :: AbstractFloat = 0.05
 )
     if Base.get_extension(@__MODULE__, :NonlinearSolveSpeedMappingExt) === nothing
         error("`SpeedMappingJL` requires `SpeedMapping.jl` to be loaded")
     end
 
-    return SpeedMappingJL(σ_min, stabilize, check_obj, orders, :SpeedMappingJL)
+    return SpeedMappingJL(
+      f, algo, lags, condition_max, relax_default, ada_relax, composite, maps_limit, 
+      reltol_resid_grow, abstol_obj_grow, lower, upper, buffer, :SpeedMappingJL
+    )
 end
 
 """
