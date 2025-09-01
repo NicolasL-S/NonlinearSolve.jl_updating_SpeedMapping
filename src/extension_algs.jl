@@ -278,7 +278,7 @@ NLSolversJL(; method, autodiff = nothing) = NLSolversJL(method, autodiff)
           upper = nothing, buffer = 0.05
     )
 
-Wrapper over [SpeedMapping.jl](https://nicolasl-s.github.io/SpeedMapping.jl/) for solving
+Wrapper over [SpeedMapping.jl](https://nicolasl-s.github.io/SpeedMappingDeployDoc.jl/dev/) for solving
 fixed-point problems. We allow using this algorithm to solve root finding problems as well. It 
 implements two algorithms: Alternating cyclic extrapolations (ACX) (see [lepage2024alternating](@cite))
 and [Anderson acceleration](https://en.wikipedia.org/wiki/Anderson_acceleration) (AA).
