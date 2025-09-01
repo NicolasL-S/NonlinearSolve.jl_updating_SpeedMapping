@@ -98,7 +98,7 @@ end
         end
     end
 
-    for kwargs in ((;), (; orders = [3, 2]), (; stabilize = true))
+    for kwargs in ((;), (;algo = :acx), (;ada_relax = :minimum_distance), (;composite = :aa1))
         alg = SpeedMappingJL(; kwargs...)
         sol = solve(prob, alg)
         @test vec(sol.u)' * A[:, 3] ≈ 32.916472867168096
